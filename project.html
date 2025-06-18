@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>ระบบวัดระดับน้ำและค่า pH</title>
+  <link rel="icon" href="favicon.png" type="image/png" />
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Kanit&display=swap');
+
+    :root {
+      --bg: #f0f8ff;
+      --text: #333;
+      --card: #ffffff;
+      --accent: #00796b;
+      --shadow: rgba(0, 0, 0, 0.1);
+    }
+
+    body.dark {
+      --bg: #121212;
+      --text: #eeeeee;
+      --card: #1e1e1e;
+      --accent: #80cbc4;
+      --shadow: rgba(255, 255, 255, 0.1);
+    }
+
+    body {
+      font-family: 'Kanit', sans-serif;
+      margin: 0;
+      padding: 0;
+      background: var(--bg);
+      color: var(--text);
+      transition: all 0.3s ease;
+    }
+
+    .container {
+      max-width: 1200px;
+      margin: auto;
+      padding: 20px;
+    }
+
+    .university-logo {
+      text-align: center;
+      margin-top: 20px;
+    }
+
+    .university-logo img {
+      max-width: 150px;
+      margin-bottom: 10px;
+      box-shadow: none;
+      /* ไม่มีเงา */
+    }
+
+    .system-name {
+      text-align: center;
+      font-size: 30px;
+      font-weight: bold;
+      margin: 10px 0 30px;
+      color: var(--accent);
+      text-shadow: 1px 1px 2px var(--shadow);
+    }
+
+    .box {
+      background: var(--card);
+      border-radius: 16px;
+      box-shadow: 0 6px 14px var(--shadow);
+      padding: 30px;
+      margin-bottom: 30px;
+      transition: transform 0.3s ease, background 0.3s ease;
+    }
+
+    .box:hover {
+      transform: translateY(-4px);
+    }
+
+    .box h2 {
+      font-size: 24px;
+      color: var(--accent);
+      margin-bottom: 16px;
+    }
+
+    .info, .box p {
+      font-size: 18px;
+      margin-bottom: 8px;
+    }
+
+    .ph-value, .ultrasonic-value {
+      font-size: 24px;
+      font-weight: bold;
+      color: #d32f2f;
+    }
+
+    canvas {
+      margin-top: 20px;
+      border-radius: 8px;
+      background-color: #fafafa;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 10px;
+    }
+
+    table th, table td {
+      padding: 12px;
+      border: 1px solid #ddd;
+      text-align: center;
+    }
+
+    table th {
+      background-color: var(--accent);
+      color: white;
+    }
+
+    table tr:nth-child(even) {
+      background-color: #f9f9f9;
+    }
+
+    table tr:hover {
+      background-color: #e0f7fa;
+    }
+
+    img {
+      border-radius: 10px;
+      margin: 10px 0;
+      max-width: 100%;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+    }
+
+    .theme-toggle {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      background-color: var(--accent);
+      color: white;
+      border: none;
+      padding: 10px 16px;
+      border-radius: 20px;
+      cursor: pointer;
+      font-size: 16px;
+      box-shadow: 0 4px 10px var(--shadow);
+      z-index: 999;
+      transition: background 0.3s ease;
+    }
+
+    .theme-toggle:hover {
+      background-color: #004d40;
+    }
+
+    /* ซ่อนผลการคำนวณไว้ */
+    #result1, #result2, #result3, th:nth-child(2) {
+      display: none;
+    }
+
+    @media screen and (max-width: 768px) {
+      .system-name {
+        font-size: 22px;
+      }
+
+      .box h2 {
+        font-size: 18px;
+      }
+
+      .ph-value, .ultrasonic-value {
+        font-size: 18px;
+      }
+
+      table {
+        font-size: 14px;
+      }
+    }
+  </style>
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script>
+    let distanceData = [];
+    let timeLabels = [];
+
+    function updateValues() {
+      fetch('http://192.168.100.60/')
+        .then(res => res.json())
+        .then(data => {
+          document.getElementById('ph-value').innerText = data.ph;
+          let distance = parseFloat(data.distance);
+          document.getElementById('ultrasonic-value').innerText = distance.toFixed(2) + ' m';
+          document.getElementById('distanceRaw').innerText = data.distanceRaw;
+
+          let volume = (1 / 2) * 56 * distance;
+          document.getElementById('water-volume').innerText = volume.toFixed(2) + ' ลูกบาศก์เมตร';
+
+          let results = [10, 20, 30].map(val => (volume / val).toFixed(2));
+          results.forEach((res, i) => {
+            document.getElementById(`result${i + 1}`).innerText = res;
+            let date = new Date();
+            date.setDate(date.getDate() + Math.ceil(res));
+            document.getElementById(`date${i + 1}`).innerText = date.toLocaleDateString('th-TH');
+          });
+
+          const currentTime = new Date().toLocaleTimeString();
+          distanceData.push(distance);
+          timeLabels.push(currentTime);
+          if (distanceData.length > 10) {
+            distanceData.shift();
+            timeLabels.shift();
+          }
+          myChart.update();
+        })
+        .catch(error => console.error('Error:', error));
+    }
+
+    function toggleTheme() {
+      document.body.classList.toggle("dark");
+    }
+
+    window.onload = () => {
+      document.getElementById('current-date').innerText = new Date().toLocaleDateString('th-TH');
+
+      const ctx = document.getElementById('distanceChart').getContext('2d');
+      window.myChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: timeLabels,
+          datasets: [{
+            label: 'ความลึก (m)',
+            data: distanceData,
+            borderColor: 'rgba(75, 192, 192, 1)',
+            backgroundColor: 'rgba(75, 192, 192, 0.2)',
+            fill: true
+          }]
+        },
+        options: {
+          scales: {
+            y: {
+              beginAtZero: true
+            }
+          }
+        }
+      });
+
+      updateValues();
+      setInterval(updateValues, 5000);
+    };
+  </script>
+</head>
+
+<body>
+  <button class="theme-toggle" onclick="toggleTheme()">🌙 สลับธีม</button>
+
+  <div class="container">
+    <div class="university-logo">
+      <img src ="Ratchaphat.png" alt="Logo">
+    </div>
+    <div class="system-name">มหาวิทยาลัยราชภัฏเพชรบุรี</div>
+    <div class="system-name">ระบบวัดระดับน้ำและค่า pH พร้อมคำนวณเวลาการใช้น้ำ</div>
+
+    <div class="box">
+      <h2>การวัดค่า pH Sensor</h2>
+      <p>ค่า pH 0-6.9 = กรด | 7.1-14 = ด่าง</p>
+      <div class="ph-value">ค่า pH ที่วัดได้: <span id="ph-value">กำลังโหลด...</span></div>
+    </div>
+
+    <div class="box">
+      <h2>การวัด Ultrasonic Sensor</h2>
+      <div class="info">ความลึก: <span id="ultrasonic-value">กำลังโหลด...</span></div>
+      <div class="info">ระยะห่าง: <span id="distanceRaw">กำลังโหลด...</span></div>
+      <canvas id="distanceChart" width="400" height="200"></canvas>
+      <p class="info">ปริมาณน้ำ: <span id="water-volume">กำลังคำนวณ...</span></p>
+      <p class="info">วันที่วัดค่า: <span id="current-date">กำลังโหลด...</span></p>
+    </div>
+
+    <div class="box">
+      <h2>กราฟสรุปผลการทดลอง</h2>
+      <img src="distance.jpeg" alt="กราฟระดับน้ำ">
+      <img src="pH.jpg" alt="กราฟ pH">
+    </div>
+
+    <div class="box">
+      <h2>กราฟเปรียบเทียบ pH ในบ่อน้ำ</h2>
+      <img src="27.png">
+      <img src="28.png">
+      <img src="29.png">
+    </div>
+
+    <div class="box">
+      <h2>กราฟเปรียบเทียบ pH ในน้ำคาลิเบด</h2>
+      <img src="6.86.jpg">
+      <img src="water.jpg">
+    </div>
+
+    <div class="box">
+      <h2>เหตุการณ์สมมุติ</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>หากใช้น้ำ</th>
+            <th>ค่าที่วัดได้/ใช้น้ำ</th>
+            <th>ใช้น้ำได้ถึง</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td>10 ลบ.ม.</td><td id="result1">กำลังโหลด...</td><td id="date1">กำลังโหลด...</td></tr>
+          <tr><td>20 ลบ.ม.</td><td id="result2">กำลังโหลด...</td><td id="date2">กำลังโหลด...</td></tr>
+          <tr><td>30 ลบ.ม.</td><td id="result3">กำลังโหลด...</td><td id="date3">กำลังโหลด...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</body>
+</html>
